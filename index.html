@@ -236,7 +236,7 @@ let base=market==="spot"
 :"https://fapi.binance.com/fapi/v1/klines";
 
 let response=await fetch(
-base+"?symbol="+symbol+"&interval=1h&limit=150"
+base+"?symbol="+symbol+"&interval=5m&limit=150"
 );
 
 if(!response.ok){
