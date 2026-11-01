@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1220">
+<title>Kripto Paper Bot</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0 auto;padding:16px;max-width:900px;background:#0b1220;color:#e8eefb;font:15px Arial}
+h1{font-size:25px;margin:5px 0}
+h2{font-size:17px;margin:0 0 14px}
+p{color:#9eabc2;font-size:13px;line-height:1.5}
+.card{background:#131e30;border:1px solid #263751;border-radius:15px;padding:16px;margin:13px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#1b2a40;border-radius:11px;padding:12px;min-width:0}
+.stat small{display:block;color:#9eabc2;margin-bottom:7px}
+.stat strong{font-size:19px;overflow-wrap:anywhere}
+label{display:block;margin-top:12px;color:#bdc9dc;font-size:13px}
+input,select,button{width:100%;padding:12px;border-radius:9px;border:1px solid #344762;background:#0c1728;color:white;margin-top:7px;font-size:15px}
+button{border:0;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.4}
+.primary{background:#247aee}
+.stop{background:#a83b4b}
+.secondary{background:#344762}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.status{font-weight:bold;margin:8px 0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#e4b84b;margin-right:8px}
+.dot.on{background:#39d99a}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:11px 5px;border-bottom:1px solid #293951}
+th{color:#9eabc2}
+.green{color:#39d99a}
+.red{color:#ff7885}
+.yellow{color:#f3c66c}
+.note{font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>₿ Kripto Paper Bot</h1>
+<p>Binance canlı piyasa verisi · Otomatik sanal işlemler · Gerçek emir göndermez</p>
+
+<div class="card">
+<h2>Bot kontrolü</h2>
+<div class="status">
+<span id="dot" class="dot"></span>
+<span id="runState">BOT DURDURULDU</span>
+</div>
+<p id="connection">Piyasa verileri bekleniyor...</p>
+<div class="actions">
+<button id="startBtn" class="primary" onclick="startBot()">▶ İŞLEMİ BAŞLAT</button>
+<button id="stopBtn" class="stop" onclick="stopBot()" disabled>DURDUR</button>
+</div>
+<p class="note">Bot dakikada bir veri kontrolü yapar; sinyalleri 5 dakikalık kapanmış mumlardan üretir. AL/SAT koşulu oluşmazsa işlem açmaz. Sayfa açık ve telefon uyanık olmalıdır.</p>
+</div>
+
+<div class="card">
+<h2>Strateji ayarları</h2>
+<label>Dolar / TL kuru</label>
+<input id="fx" type="number" value="42" min="1" step="0.01">
+<label>İşlem büyüklüğü</label>
+<select id="allocation">
+<option value="10">%10 bakiye</option>
+<option value="20" selected>%20 bakiye</option>
+<option value="30">%30 bakiye</option>
+</select>
+<label>Futures kaldıraç</label>
+<select id="leverage">
+<option value="1">1x</option>
+<option value="2">2x</option>
+</select>
+<button class="secondary" onclick="saveSettings()">Ayarları kaydet</button>
+<p class="note">Kur örnektir; güncel kuru kendin gir.</p>
+</div>
+
+<div class="card">
+<h2>Sanal portföy</h2>
+<div class="grid">
+<div class="stat"><small>Spot toplam değer</small><strong id="spotBalance">5.000 ₺</strong></div>
+<div class="stat"><small>Futures öz sermaye</small><strong id="futBalance">5.000 ₺</strong></div>
+<div class="stat"><small>Toplam portföy</small><strong id="total">10.000 ₺</strong></div>
+<div class="stat"><small>Son kontrol</small><strong id="updated">-</strong></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Canlı piyasa ve sinyaller</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Coin</th><th>Fiyat</th><th>Spot</th><th>Futures</th></tr></thead>
+<tbody id="markets"><tr><td colspan="4">Veriler yükleniyor...</td></tr></tbody>
+</table>
+</div>
+<p>5 dakikalık kapanmış mumlar kullanılır. Fiyatlar Binance spot verisidir.</p>
+</div>
+
+<div class="card">
+<h2>Spot hesabı</h2>
+<div class="grid">
+<div class="stat"><small>Serbest bakiye</small><strong id="spotCash">-</strong></div>
+<div class="stat"><small>Açık varlık değeri</small><strong id="spotValue">-</strong></div>
+</div>
+<p id="spotPosition">Açık pozisyon yok.</p>
+</div>
+
+<div class="card">
+<h2>Futures hesabı</h2>
+<div class="grid">
+<div class="stat"><small>Kullanılabilir bakiye</small><strong id="futCash">-</strong></div>
+<div class="stat"><small>Açık pozisyon</small><strong id="futPosition">Yok</strong></div>
+</div>
+<p id="futDetail">Açık pozisyon bulunmuyor.</p>
+</div>
+
+<div class="card">
+<h2>İşlem geçmişi</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Piyasa</th><th>Coin</th><th>İşlem</th><th>Net sonuç</th></tr></thead>
+<tbody id="history"><tr><td colspan="4">Henüz işlem yok.</td></tr></tbody>
+</table>
+</div>
+<button class="secondary" onclick="resetBot()">Sanal hesabı sıfırla</button>
+</div>
+
+<p class="note">Uyarı: Bu eğitim amaçlı bir simülasyondur, kâr garantisi vermez. Futures fonlama, likidasyon ve kayma tam modellenmez. Telefon uykuya geçerse tarayıcı kontrolleri durabilir. Gerçek emir gönderilmez.</p>
+
+<script>
+const coins=["BTCUSDT","ETHUSDT","XRPUSDT"];
+const names={BTCUSDT:"BTC",ETHUSDT:"ETH",XRPUSDT:"XRP"};
+const fee=0.001;
+
+let data={};
+let busy=false;
+let updatePending=false;
+let running=false;
+let timer=null;
+let lastProcessed={};
+
+const fx=()=>Math.max(1,Number(document.getElementById("fx").value)||42);
+const allocation=()=>Number(document.getElementById("allocation").value)/100;
+const leverage=()=>Number(document.getElementById("leverage").value);
+const money=n=>Number(n||0).toLocaleString("tr-TR",{maximumFractionDigits:2})+" ₺";
+
+function freshState(){
+return {
+spotCash:5000/fx(),
+spotAssets:{},
+spotCosts:{},
+futCash:5000/fx(),
+futPosition:null,
+history:[]
+};
+}
+
+function loadState(){
+try{
+return JSON.parse(localStorage.getItem("paperBotV3"))||freshState();
+}catch(e){
+return freshState();
+}
+}
+
+let state=loadState();
+
+function save(){
+localStorage.setItem("paperBotV3",JSON.stringify(state));
+render();
+}
+
+function saveSettings(){
+localStorage.setItem("paperFX3",document.getElementById("fx").value);
+localStorage.setItem("paperAllocation3",document.getElementById("allocation").value);
+localStorage.setItem("paperLeverage3",document.getElementById("leverage").value);
+alert("Ayarlar kaydedildi.");
+render();
+}
+
+function ema(values,period){
+let k=2/(period+1);
+let result=values[0];
+for(let i=1;i<values.length;i++){
+result=values[i]*k+result*(1-k);
+}
+return result;
+}
+
+function rsi(values,period=14){
+let gains=0,losses=0;
+for(let i=values.length-period;i<values.length;i++){
+let d=values[i]-values[i-1];
+if(d>0)gains+=d;
+else losses-=d;
+}
+if(losses===0)return 100;
+return 100-(100/(1+gains/losses));
+}
+
+function macd(values){
+let line=[];
+for(let i=0;i<values.length;i++){
+line.push(
+ema(values.slice(0,i+1),12)-
+ema(values.slice(0,i+1),26)
+);
+}
+return {
+line:line[line.length-1],
+signal:ema(line.slice(-9),9)
+};
+}
+
+function analyze(values){
+let e20=ema(values.slice(-80),20);
+let e50=ema(values.slice(-120),50);
+let r=rsi(values);
+let m=macd(values);
+let signal="BEKLE";
+
+if(e20>e50&&m.line>m.signal&&r>=45&&r<=68){
+signal="AL";
+}
+
+if(e20<e50&&m.line<m.signal&&r>=32&&r<=55){
+signal="SAT";
+}
+
+return {signal,r};
+}
+
+async function fetchMarket(symbol,market){
+let base=market==="spot"
+?"https://api.binance.com/api/v3/klines"
+:"https://fapi.binance.com/fapi/v1/klines";
+
+let response=await fetch(
+base+"?symbol="+symbol+"&interval=5m&limit=150"
+);
+
+if(!response.ok){
+throw new Error("HTTP "+response.status);
+}
+
+let rows=await response.json();
+
+if(!Array.isArray(rows)||rows.length<60){
+throw new Error("Yetersiz mum verisi");
+}
+
+let closed=rows.slice(0,-1);
+let closes=closed.map(x=>Number(x[4]));
+
+return {
+price:Number(rows[rows.length-1][4]),
+candle:closed[closed.length-1][0],
+analysis:analyze(closes)
+};
+}
+
+function addHistory(market,symbol,type,result){
+state.history.unshift({market,symbol,type,result});
+state.history=state.history.slice(0,40);
+}
+
+function spotTrade(symbol,signal,price){
+let quantity=state.spotAssets[symbol]||0;
+
+if(signal==="AL"&&quantity===0){
+let spend=state.spotCash*allocation();
+if(spend<5)return;
+
+let feeAmount=spend*fee;
+let bought=(spend-feeAmount)/price;
+
+state.spotCash-=spend;
+state.spotAssets[symbol]=bought;
+state.spotCosts[symbol]=spend;
+
+addHistory("Spot",symbol,"AL",0);
+}
+
+if(signal==="SAT"&&quantity>0){
+let proceeds=quantity*price*(1-fee);
+let cost=state.spotCosts[symbol]||0;
+
+state.spotCash+=proceeds;
+state.spotAssets[symbol]=0;
+delete state.spotCosts[symbol];
+
+addHistory("Spot",symbol,"SAT",proceeds-cost);
+}
+}
+
+function closeFutures(price){
+let p=state.futPosition;
+if(!p)return;
+
+let direction=p.side==="LONG"?1:-1;
+let pnl=(price-p.entry)/p.entry*p.notional*direction;
+let exitFee=p.notional*fee;
+
+state.futCash+=p.margin+pnl-exitFee;
+
+addHistory(
+"Futures",
+p.symbol,
+"KAPAT",
+pnl-p.entryFee-exitFee
+);
+
+state.futPosition=null;
+}
+
+function futuresTrade(symbol,signal,price){
+let p=state.futPosition;
+
+if(p){
+if(p.symbol===symbol){
+let opposite=
+(p.side==="LONG"&&signal==="SAT")||
+(p.side==="SHORT"&&signal==="AL");
+
+if(opposite)closeFutures(price);
+}
+return;
+}
+
+if(signal!=="AL"&&signal!=="SAT")return;
+
+let margin=state.futCash*allocation();
+let lev=leverage();
+let notional=margin*lev;
+let entryFee=notional*fee;
+
+if(margin<5||margin+entryFee>state.futCash)return;
+
+state.futCash-=margin+entryFee;
+
+state.futPosition={
+symbol,
+side:signal==="AL"?"LONG":"SHORT",
+entry:price,
+margin,
+notional,
+leverage:lev,
+entryFee
+};
+
+addHistory(
+"Futures",
+symbol,
+signal==="AL"?"LONG":"SHORT",
+0
+);
+}
+
+function manageStops(symbol,price){
+let p=state.futPosition;
+if(!p||p.symbol!==symbol)return;
+
+let move=(price-p.entry)/p.entry*
+(p.side==="LONG"?1:-1);
+
+if(move<=-0.02||move>=0.04){
+closeFutures(price);
+}
+}
+
+async function update(){
+if(busy){
+updatePending=true;
+return;
+}
+busy=true;
+let errors=[];
+
+try{
+for(let symbol of coins){
+try{
+let [spot,futures]=await Promise.all([
+fetchMarket(symbol,"spot"),
+fetchMarket(symbol,"futures")
+]);
+
+data[symbol]={spot,futures};
+
+if(running){
+let key=spot.candle+"-"+futures.candle;
+
+if(lastProcessed[symbol]!==key){
+spotTrade(symbol,spot.analysis.signal,spot.price);
+futuresTrade(symbol,futures.analysis.signal,futures.price);
+lastProcessed[symbol]=key;
+}
+
+manageStops(symbol,futures.price);
+}
+
+}catch(e){
+errors.push(names[symbol]+": "+e.message);
+}
+}
+
+document.getElementById("updated").textContent=
+new Date().toLocaleTimeString("tr-TR");
+
+document.getElementById("connection").textContent=
+errors.length
+?"Veri hatası: "+errors.join(" / ")
+:"Binance bağlantısı başarılı.";
+
+save();
+
+}finally{
+busy=false;
+if(updatePending){
+updatePending=false;
+setTimeout(update,0);
+}
+}
+}
+
+function render(){
+let rate=fx();
+let spotAssets=0;
+
+for(let symbol of coins){
+spotAssets+=(state.spotAssets[symbol]||0)*
+(data[symbol]?.spot.price||0);
+}
+
+let spotEquity=state.spotCash+spotAssets;
+let p=state.futPosition;
+let futuresEquity=state.futCash;
+
+if(p&&data[p.symbol]){
+let price=data[p.symbol].futures.price;
+let direction=p.side==="LONG"?1:-1;
+
+futuresEquity+=p.margin+
+(price-p.entry)/p.entry*p.notional*direction;
+}
+
+document.getElementById("spotBalance").textContent=
+money(spotEquity*rate);
+
+document.getElementById("futBalance").textContent=
+money(futuresEquity*rate);
+
+document.getElementById("total").textContent=
+money((spotEquity+futuresEquity)*rate);
+
+document.getElementById("spotCash").textContent=
+money(state.spotCash*rate);
+
+document.getElementById("spotValue").textContent=
+money(spotAssets*rate);
+
+document.getElementById("futCash").textContent=
+money(state.futCash*rate);
+
+document.getElementById("spotPosition").textContent=
+coins.filter(s=>(state.spotAssets[s]||0)>0)
+.map(s=>names[s]+": "+state.spotAssets[s].toFixed(6))
+.join(" · ")||"Açık pozisyon yok.";
+
+document.getElementById("futPosition").textContent=
+p?names[p.symbol]+" "+p.side:"Yok";
+
+document.getElementById("futDetail").textContent=
+p
+?"Giriş "+money(p.entry*rate)+" · "+p.leverage+
+"x · Teminat "+money(p.margin*rate)
+:"Açık pozisyon bulunmuyor.";
+
+document.getElementById("markets").innerHTML=
+coins.map(s=>{
+let d=data[s];
+
+if(!d){
+return "<tr><td>"+names[s]+"</td><td colspan='3'>Veri bekleniyor</td></tr>";
+}
+
+let spotSignal=d.spot.analysis.signal;
+let futSignal=d.futures.analysis.signal;
+
+return "<tr><td>"+names[s]+"</td><td>"+
+money(d.spot.price*rate)+"</td><td class='"+
+(spotSignal==="AL"?"green":spotSignal==="SAT"?"red":"yellow")+
+"'>"+spotSignal+"</td><td class='"+
+(futSignal==="AL"?"green":futSignal==="SAT"?"red":"yellow")+
+"'>"+futSignal+"</td></tr>";
+}).join("");
+
+document.getElementById("history").innerHTML=
+state.history.length
+?state.history.map(h=>
+"<tr><td>"+h.market+"</td><td>"+names[h.symbol]+
+"</td><td>"+h.type+"</td><td>"+
+money(h.result*rate)+"</td></tr>"
+).join("")
+:"<tr><td colspan='4'>Henüz işlem yok.</td></tr>";
+}
+
+function startBot(){
+if(running)return;
+
+running=true;
+
+document.getElementById("dot").classList.add("on");
+document.getElementById("runState").textContent="BOT ÇALIŞIYOR · VERİ BEKLENİYOR";
+document.getElementById("startBtn").disabled=true;
+document.getElementById("stopBtn").disabled=false;
+
+update();
+timer=setInterval(update,60000);
+}
+
+function stopBot(){
+running=false;
+clearInterval(timer);
+timer=null;
+
+document.getElementById("dot").classList.remove("on");
+document.getElementById("runState").textContent="BOT DURDURULDU";
+document.getElementById("startBtn").disabled=false;
+document.getElementById("stopBtn").disabled=true;
+}
+
+function resetBot(){
+if(!confirm("Sanal hesaplar sıfırlansın mı?"))return;
+
+state=freshState();
+lastProcessed={};
+save();
+}
+
+document.getElementById("fx").value=
+localStorage.getItem("paperFX3")||"42";
+
+document.getElementById("allocation").value=
+localStorage.getItem("paperAllocation3")||"20";
+
+document.getElementById("leverage").value=
+localStorage.getItem("paperLeverage3")||"1";
+
+render();
+update();
+</script>
+</body>
+</html>
